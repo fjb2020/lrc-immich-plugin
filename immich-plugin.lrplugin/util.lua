@@ -113,6 +113,29 @@ function util.getPhotoDeviceId(photo)
     return nil
 end
 
+-- True if a Lightroom publish service belongs to this Immich plugin.
+function util.isImmichPublishService(service)
+    if not service or type(service.getPluginId) ~= "function" then
+        return false
+    end
+    local pluginId = service:getPluginId()
+    if type(pluginId) ~= "string" then
+        return false
+    end
+    local baseId = (type(_PLUGIN) == "table" and type(_PLUGIN.id) == "string") and _PLUGIN.id or nil
+    if baseId and pluginId == baseId then
+        return true
+    end
+    if baseId and string.sub(pluginId, 1, string.len(baseId)) == baseId then
+        return true
+    end
+    -- Fallback for older/newer Lightroom variants that use toolkit identifier forms.
+    if pluginId == "lrc-immich-plugin" or string.sub(pluginId, 1, string.len("lrc-immich-plugin")) == "lrc-immich-plugin" then
+        return true
+    end
+    return false
+end
+
 -- Shared by Export and Publish: validate export context and connect to Immich.
 -- contextLabel: "Export" or "Publish" (used in error messages and task name).
 -- Returns: exportSession, exportParams, immich or nil.

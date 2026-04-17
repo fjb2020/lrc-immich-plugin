@@ -940,6 +940,119 @@ function ImmichAPI:getAssetInfo(assetId)
     return parsedResponse
 end
 
+-- Updates mutable first-class asset fields (e.g. description, latitude, longitude).
+-- fields is passed as-is to PUT /assets/{id}.
+function ImmichAPI:updateAsset(assetId, fields)
+    if util.nilOrEmpty(assetId) then
+        log:warn('updateAsset: assetId empty')
+        return false
+    end
+    if type(fields) ~= "table" then
+        log:warn('updateAsset: fields is not a table')
+        return false
+    end
+    if next(fields) == nil then
+        return true
+    end
+
+    local result = self:doCustomRequest('PUT', '/assets/' .. tostring(assetId), fields)
+    return result ~= nil
+end
+
+-- Adds tags to assets in one request.
+function ImmichAPI:bulkTagAssets(assetIds, tagIds)
+    if type(assetIds) ~= "table" or #assetIds == 0 then
+        log:warn('bulkTagAssets: assetIds empty')
+        return false
+    end
+    if type(tagIds) ~= "table" or #tagIds == 0 then
+        log:warn('bulkTagAssets: tagIds empty')
+        return false
+    end
+
+    local body = {
+        assetIds = assetIds,
+        tagIds = tagIds,
+    }
+    local result = self:doCustomRequest('PUT', '/tags/assets', body)
+    return result ~= nil
+end
+
+-- ---------------------------------------------------------------------------
+-- Tags
+-- ---------------------------------------------------------------------------
+
+-- Returns all tags from Immich as an array of {id, name, value (full path)}.
+function ImmichAPI:getTags()
+    local parsedResponse = self:doGetRequest('/tags')
+    if parsedResponse == nil then
+        return nil
+    end
+    return parsedResponse
+end
+
+-- Creates a tag in Immich. parentTagId is optional (nil for top-level).
+-- Returns the created tag object, or nil on failure.
+function ImmichAPI:createTag(name, parentTagId)
+    if util.nilOrEmpty(name) then
+        log:warn('createTag: name is empty')
+        return nil
+    end
+    local body = { name = name }
+    if parentTagId and parentTagId ~= "" then
+        body.parentId = parentTagId
+    end
+    local result = self:doPostRequest('/tags', body)
+    if result and result.id then
+        log:trace('createTag: created tag "' .. name .. '" with id ' .. tostring(result.id))
+        return result
+    end
+    log:warn('createTag: unexpected response for tag "' .. name .. '"')
+    return nil
+end
+
+-- Deletes a tag in Immich by id.
+-- Returns true on success, false otherwise.
+function ImmichAPI:deleteTag(tagId)
+    if util.nilOrEmpty(tagId) then
+        log:warn('deleteTag: tagId is empty')
+        return false
+    end
+
+    if not ensureConnectivity(self) then return false end
+
+    local apiPath = '/tags/' .. tostring(tagId)
+    logRequestStart(self, 'DELETE', apiPath)
+    -- Send an empty body for DELETE. Some Immich versions reject '{}' with 400.
+    local response, headers = LrHttp.post(
+        self.url .. self.apiBasePath .. apiPath,
+        '',
+        self:createHeaders(),
+        'DELETE',
+        HTTP_TIMEOUT_DEFAULT
+    )
+
+    if not headers then
+        log:error('ImmichAPI DELETE: no response headers (network error): ' .. apiPath)
+        return false
+    end
+
+    if headers.status == 204 or headers.status == 200 then
+        log:trace('deleteTag: deleted tag id ' .. tostring(tagId))
+        return true
+    end
+
+    log:error('ImmichAPI DELETE request failed. ' .. apiPath .. ' (status ' .. tostring(headers.status or '?') .. ')')
+    if headers then
+        log:error('ImmichAPI DELETE headers: ' .. util.dumpTable(headers))
+    end
+    if response ~= nil then
+        log:error('ImmichAPI DELETE response body: ' .. tostring(response))
+    end
+    log:warn('deleteTag: failed to delete tag id ' .. tostring(tagId))
+    return false
+end
+
 function ImmichAPI:checkIfAlbumExists(albumId)
     if util.nilOrEmpty(albumId) then return false end
     log:trace("ImmichAPI: checkIfAlbumExists")
