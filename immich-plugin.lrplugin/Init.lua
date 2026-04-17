@@ -32,6 +32,7 @@ if _G.prefs.logging == nil then
 end
 if _G.prefs.logging then
     _G.log:enable('logfile')
+    --G.log:enable('print')
 else
     _G.log:disable()
 end

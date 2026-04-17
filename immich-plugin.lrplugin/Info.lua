@@ -31,6 +31,14 @@ return {
 			title = "Immich import configuration",
 			file = "ImportConfiguration.lua",
 		},
+		{
+			title = "Export Keywords to Immich",
+			file = "ExportKeywords.lua",
+		},
+		{
+			title = "Send Metadata for Selected Images",
+			file = "SendMetadataSelected.lua",
+		},
 	},
 
 	LrExportMenuItems = {
@@ -48,6 +56,6 @@ return {
 
 	LrPluginInfoURL = 'https://github.com/bmachek/lrc-immich-plugin/',
 
-	VERSION = { major = 4, minor = 0, revision = 0, build = 0, },
+	VERSION = { major = 4, minor = 0, revision = 0, build = 17, },
 
 }
