@@ -15,6 +15,11 @@ Provides both **Export** and **Publish Services**, plus tools to **import assets
 - **Publish Service integration**
   - Create a Lightroom Publish Service backed by Immich.
   - Keep Lightroom collections and Immich albums aligned via publish operations.
+  - Optional post-publish metadata sync (description, GPS coordinates, tags).
+
+- **Metadata sync tools**
+  - Library menu command: Send metadata for selected published photos.
+  - Reuses the same sync logic as optional post-publish metadata sync.
 
 - **Import from Immich**
   - Download assets from Immich albums into a local folder.
@@ -49,6 +54,22 @@ All setup and usage details live in the **GitHub Wiki**:
 - **Troubleshooting & FAQ**
 
 You can find the Wiki from the repository home page under the **Wiki** tab.
+
+---
+
+## Metadata Sync Notes
+
+- Description source:
+  - Reads Lightroom formatted metadata keys in this order: `caption`, `title`, `headline`.
+- GPS source:
+  - Reads from `photo:getRawMetadata("gps")` only.
+  - If GPS is not present on a photo, latitude/longitude are not sent for that photo.
+- Tags source:
+  - Uses assigned Lightroom keywords and maps hierarchy to Immich tags.
+  - Missing tags are created as needed before assignment.
+- Publish integration:
+  - If enabled in publish settings, metadata sync runs after successful uploads.
+  - Sync is best-effort; upload success is preserved even if metadata/tag operations later fail.
 
 ---
 

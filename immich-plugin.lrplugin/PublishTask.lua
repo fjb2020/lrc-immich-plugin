@@ -1,4 +1,5 @@
 require "ImmichAPI"
+require "MetadataSync"
 require "StackManager"
 require "UploadHelpers"
 
@@ -189,6 +190,31 @@ local function runPublishExport(immich, exportContext, progressScope, exportPara
 end
 
 --------------------------------------------------------------------------------
+local function runPostPublishMetadataSync(immich, exportParams, exportedPrimaryByPhoto, stackWarnings)
+    if not exportParams or not exportParams.syncMetadataAfterPublish then
+        return
+    end
+    if not exportedPrimaryByPhoto or next(exportedPrimaryByPhoto) == nil then
+        return
+    end
+
+    local options = { stripTagRootNode = exportParams.stripTagRootNode }
+    log:trace('PublishTask: post-publish sync options stripTagRootNode=' .. tostring(options.stripTagRootNode))
+    local result = MetadataSync.syncExportedPrimaryMap(immich, exportedPrimaryByPhoto, nil, nil, options)
+    log:trace('PublishTask: post-publish metadata sync processed=' .. tostring(result.processed)
+        .. ' updated=' .. tostring(result.updated)
+        .. ' tagged=' .. tostring(result.tagged)
+        .. ' failedUpdate=' .. tostring(result.failedUpdate)
+        .. ' failedTagging=' .. tostring(result.failedTagging))
+
+    if (result.failedUpdate or 0) > 0 or (result.failedTagging or 0) > 0 then
+        table.insert(stackWarnings,
+            'Metadata sync after publish had failures (updates: ' .. tostring(result.failedUpdate)
+                .. ', tags: ' .. tostring(result.failedTagging) .. '). Check logs for details.')
+    end
+end
+
+--------------------------------------------------------------------------------
 
 function PublishTask.processRenderedPhotos(functionContext, exportContext)
     local exportSession, exportParams, immich = util.validateExportContextAndConnect(exportContext, "Publish")
@@ -204,6 +230,8 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
 
     local failures, stackWarnings, atLeastSomeSuccess, exportedPrimaryByPhoto = runPublishExport(
         immich, exportContext, progressScope, exportParams, albumCreationStrategy, albumId, albumAssetIds)
+
+    runPostPublishMetadataSync(immich, exportParams, exportedPrimaryByPhoto, stackWarnings)
 
     util.reportUploadFailuresAndWarnings(failures, stackWarnings)
 end
@@ -226,7 +254,7 @@ function PublishTask.getCommentsFromPublishedCollection(publishSettings, arrayOf
         local comments = {}
         for j, publishedCollection in ipairs(publishedCollections) do
             -- Check if the published collection is an Immich collection and still exists on the server.
-            if string.sub(publishedCollection:getService():getPluginId(), 1, -3) == _PLUGIN.id then
+            if util.isImmichPublishService(publishedCollection:getService()) then
                 log:trace('publishedCollection : ' .. publishedCollection:getName() .. " is an Immich collection.")
                 if immich:checkIfAlbumExists(publishedCollection:getRemoteId()) then
                     log:trace("... and it exists on the server.")

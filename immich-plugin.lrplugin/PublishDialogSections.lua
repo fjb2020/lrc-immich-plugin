@@ -105,6 +105,26 @@ function PublishDialogSections.sectionsForTopOfDialog(f, propertyTable)
 				},
 			},
 		},
+		{
+			title = "Metadata",
+			bind_to_object = propertyTable,
+			f:column {
+				f:row {
+					f:checkbox {
+						title = "Send description, GPS coordinates, and tags after publish",
+						value = bind 'syncMetadataAfterPublish',
+					},
+				},
+				f:row {
+					f:spacer { width = 20 },
+					f:checkbox {
+						title = "Strip root keyword node from tag hierarchy",
+						value = bind 'stripTagRootNode',
+						enabled = bind 'syncMetadataAfterPublish',
+					},
+				},
+			},
+		},
 	}
 
 	return result

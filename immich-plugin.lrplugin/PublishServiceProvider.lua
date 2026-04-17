@@ -18,6 +18,8 @@ return {
 		{ key = "apiKey", default = '' },
 		{ key = 'stackDngJpg', default = false },
 		{ key = 'stackLrStacks', default = false },
+		{ key = 'syncMetadataAfterPublish', default = false },
+		{ key = 'stripTagRootNode', default = false },
 	},
 
 	small_icon = 'icons/logo_small.png',
