@@ -156,7 +156,7 @@ end
 -- keyword        : LrKeyword object to export
 -- parentTagId    : Immich tag id of the already-created parent, or nil for top-level
 -- existingByName : map of lowercase tag name → Immich tag object (for dedup)
--- results        : accumulator table { created, skipped, failed }
+-- results        : accumulator table { created, skippedExisting, skippedByFlag, failed }
 -- recurse        : boolean – if false, only the root keyword is exported
 -- progress       : LrProgressScope to update after each keyword
 -- progressState  : table { completed = number, total = number }
@@ -165,12 +165,29 @@ end
 local function exportKeywordTree(immich, keyword, parentTagId, existingByName, results, recurse, progress, progressState, options, createdTagIds)
     if progress:isCanceled() then return end
 
+    local keywordAttributes = keyword:getAttributes() or {}
     local name = keyword:getName()
     local key  = string.lower(name)
 
     local tagId
 
     progress:setCaption(name)
+
+    if not keywordAttributes.includeOnExport then
+        log:trace('ExportKeywords: skipping keyword not marked for export "' .. name .. '"')
+        results.skippedByFlag = results.skippedByFlag + 1
+        progressState.completed = progressState.completed + 1
+        progress:setPortionComplete(progressState.completed, progressState.total)
+
+        if recurse then
+            for _, child in ipairs(keyword:getChildren()) do
+                if progress:isCanceled() then return end
+                exportKeywordTree(immich, child, parentTagId, existingByName, results, true, progress, progressState, options, createdTagIds)
+            end
+        end
+
+        return
+    end
 
     local allSameNameTags = existingByName[key] or {}
     local targetParentId = getTargetParentId(parentTagId, options)
@@ -207,7 +224,7 @@ local function exportKeywordTree(immich, keyword, parentTagId, existingByName, r
     if (not options.deleteExistingMatching) and #matchingTagsForTargetParent > 0 then
         log:trace('ExportKeywords: skipping existing tag "' .. name .. '"')
         tagId = matchingTagsForTargetParent[1].id
-        results.skipped = results.skipped + 1
+        results.skippedExisting = results.skippedExisting + 1
     else
         local effectiveParentTagId = targetParentId
         local created = immich:createTag(name, effectiveParentTagId)
@@ -405,7 +422,7 @@ return {
         end
 
         -- Export
-        local results = { created = 0, skipped = 0, failed = 0, deleted = 0, failedDeletes = 0 }
+        local results = { created = 0, skippedExisting = 0, skippedByFlag = 0, failed = 0, deleted = 0, failedDeletes = 0 }
         local total = countKeywords(selectedItem.value, includeChildren)
         local progress = LrProgressScope {
             title      = "Exporting keywords to Immich",
@@ -424,8 +441,8 @@ return {
         -- Summary
         if not progress:isCanceled() then
             local summary = string.format(
-                "Export complete.\n\nCreated: %d\nAlready existed (skipped): %d\nDeleted existing: %d\nFailed deletes: %d\nFailed creates: %d",
-                results.created, results.skipped, results.deleted, results.failedDeletes, results.failed
+                "Export complete.\n\nCreated: %d\nAlready existed (skipped): %d\nNot marked for export (skipped): %d\nDeleted existing: %d\nFailed deletes: %d\nFailed creates: %d",
+                results.created, results.skippedExisting, results.skippedByFlag, results.deleted, results.failedDeletes, results.failed
             )
             LrDialogs.message("Export Keywords to Immich", summary, (results.failed > 0 or results.failedDeletes > 0) and "warning" or "info")
         end

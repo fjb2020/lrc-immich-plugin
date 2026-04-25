@@ -21,6 +21,7 @@ return {
 	},
 
 	LrMetadataProvider = 'MetadataProvider.lua',
+	LrMetadataTagsetFactory = 'Tagset.lua',
 
 	LrLibraryMenuItems = {
 		{
@@ -36,8 +37,20 @@ return {
 			file = "ExportKeywords.lua",
 		},
 		{
-			title = "Send Metadata for Selected Images",
+			title = "Send Metadata to Immich for Selected Images",
 			file = "SendMetadataSelected.lua",
+		},
+		{
+			title = "Import Metadata from Immich for Selected Images",
+			file = "ImportMetadataSelected.lua",
+		},
+		{
+			title = "Sync Album Contents for Selected Collection",
+			file = "SyncAlbumSelected.lua",
+		},
+		{
+			title = "Finalize Album Sync for Selected Collection",
+			file = "FinalizeAlbumSync.lua",
 		},
 	},
 
@@ -56,6 +69,6 @@ return {
 
 	LrPluginInfoURL = 'https://github.com/bmachek/lrc-immich-plugin/',
 
-	VERSION = { major = 4, minor = 0, revision = 0, build = 17, },
+	VERSION = { major = 4, minor = 0, revision = 0, build = 29, },
 
 }

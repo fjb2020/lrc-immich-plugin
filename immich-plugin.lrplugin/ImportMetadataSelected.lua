@@ -4,6 +4,6 @@ require "MetadataSync"
 
 return {
     LrTasks.startAsyncTask(function()
-        MetadataSync.syncForCurrentSelection("push")
+        MetadataSync.syncForCurrentSelection("pull")
     end)
 }

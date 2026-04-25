@@ -157,6 +157,7 @@ local function showConfigurationDialog()
         propertyTable.url = ""
         propertyTable.apiKey = ""
         propertyTable.importPath = ""
+        propertyTable.albumSyncStagingFolder = ""
         propertyTable.importBatchSize = prefs.importBatchSize or 5
 
         if prefs.url ~= nil then
@@ -169,6 +170,10 @@ local function showConfigurationDialog()
 
         if prefs.importPath ~= nil then
             propertyTable.importPath = prefs.importPath
+        end
+
+        if prefs.albumSyncStagingFolder ~= nil then
+            propertyTable.albumSyncStagingFolder = prefs.albumSyncStagingFolder
         end
 
     local contents = f:column {
@@ -295,6 +300,50 @@ local function showConfigurationDialog()
                 end,
             },
         },
+
+        f:row {
+            f:static_text {
+                title = "Album Sync Staging Folder:",
+                alignment = 'right',
+                width = share 'labelWidth',
+            },
+            f:edit_field {
+                value = bind 'albumSyncStagingFolder',
+                truncation = 'middle',
+                immediate = false,
+                fill_horizontal = 1,
+                width_in_chars = 28,
+                validate = function (v, path)
+                    if path and path ~= "" then
+                        if LrFileUtils.exists(path) then
+                            return true, path, ''
+                        else
+                            return false, path, 'Selected path does not exist'
+                        end
+                    end
+                    return true, path, ''
+                end,
+            },
+            f:push_button {
+                title = 'Browse...',
+                action = function(button)
+                    local directory = LrDialogs.runOpenPanel({
+                        title = "Choose Album Sync Staging Folder",
+                        prompt = "Select",
+                        canChooseFiles = false,
+                        canChooseDirectories = true,
+                        canCreateDirectories = true,
+                        allowsMultipleSelection = false,
+                    })
+                    if directory and directory[1] then
+                        log:info("User selected album sync staging path: " .. directory[1])
+                        propertyTable.albumSyncStagingFolder = directory[1]
+                    else
+                        log:info("User cancelled folder selection")
+                    end
+                end,
+            },
+        },
     }
 
     -- Show the dialog
@@ -315,9 +364,11 @@ local function showConfigurationDialog()
                 log:info("Connection successful, saving configuration:")
                 log:info("  URL: " .. propertyTable.url)
                 log:info("  Import Path: " .. propertyTable.importPath)
+                log:info("  Album Sync Staging Folder: " .. (propertyTable.albumSyncStagingFolder or "(not set)"))
                 prefs.url = propertyTable.url
                 prefs.apiKey = propertyTable.apiKey
                 prefs.importPath = propertyTable.importPath
+                prefs.albumSyncStagingFolder = propertyTable.albumSyncStagingFolder
                 prefs.importBatchSize = tonumber(propertyTable.importBatchSize) or 5
                 log:info("Configuration saved successfully")
             else

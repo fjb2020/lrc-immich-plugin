@@ -110,13 +110,22 @@ function PublishDialogSections.sectionsForTopOfDialog(f, propertyTable)
 			bind_to_object = propertyTable,
 			f:column {
 				f:row {
+					f:static_text {
+						title = "Sync after publish:",
+						alignment = 'right',
+						width = LrView.share "label_width",
+					},
 					f:checkbox {
 						title = "Send description, GPS coordinates, and tags after publish",
 						value = bind 'syncMetadataAfterPublish',
 					},
 				},
 				f:row {
-					f:spacer { width = 20 },
+					f:static_text {
+						title = "Tag hierarchy:",
+						alignment = 'right',
+						width = LrView.share "label_width",
+					},
 					f:checkbox {
 						title = "Strip root keyword node from tag hierarchy",
 						value = bind 'stripTagRootNode',

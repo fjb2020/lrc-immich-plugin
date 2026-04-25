@@ -3,6 +3,7 @@
 util = {}
 
 -- Utility function to check if table contains a value
+-- ***********************************************************
 function util.table_contains(tbl, x)
     if type(tbl) ~= "table" then
         return false
@@ -18,6 +19,7 @@ function util.table_contains(tbl, x)
 end
 
 -- Utility function to dump tables as JSON scrambling the API key.
+-- ***********************************************************
 function util.dumpTable(t)
     if t == nil then
         return "nil"
@@ -32,11 +34,13 @@ end
 
 -- Check if val is empty or nil
 -- Taken from https://github.com/midzelis/mi.Immich.Publisher/blob/main/utils.lua
+-- ***********************************************************
 local function trim(s)
     return s:match("^%s*(.-)%s*$")
 end
 
 -- Taken from https://github.com/midzelis/mi.Immich.Publisher/blob/main/utils.lua
+-- ***********************************************************
 function util.nilOrEmpty(val)
     if type(val) == 'string' then
         return val == nil or trim(val) == ''
@@ -46,11 +50,13 @@ function util.nilOrEmpty(val)
 end
 
 -- Get lowercase file extension from path (e.g. "photo.dng" -> "dng")
+-- ***********************************************************
 function util.getExtension(path)
     if not path or type(path) ~= "string" then return "" end
     return string.lower(string.match(path, "%.([^%.]+)$") or "")
 end
 
+-- ***********************************************************
 function util.cutApiKey(key)
     if key == nil or type(key) ~= "string" then
         return "(no key)"
@@ -64,6 +70,7 @@ function util.cutApiKey(key)
     return string.sub(key, 1, 20) .. '...'
 end
 
+-- ***********************************************************
 function util.getLogfilePath()
     local filename = "ImmichPlugin.log"
     local macPath14 = LrPathUtils.getStandardFilePath('home') .. "/Library/Logs/Adobe/Lightroom/LrClassicLogs/"
@@ -91,6 +98,7 @@ end
 -- Get photo UUID for use as deviceAssetId
 -- UUIDs are stable and don't change when photos are reimported
 -- Falls back to localIdentifier if UUID is not available (for backward compatibility)
+-- ***********************************************************
 function util.getPhotoDeviceId(photo)
     if not photo then
         return nil
@@ -114,6 +122,7 @@ function util.getPhotoDeviceId(photo)
 end
 
 -- True if a Lightroom publish service belongs to this Immich plugin.
+-- ***********************************************************
 function util.isImmichPublishService(service)
     if not service or type(service.getPluginId) ~= "function" then
         return false
@@ -136,9 +145,20 @@ function util.isImmichPublishService(service)
     return false
 end
 
+-- Lightroom can wrap property tables as { ["< contents >"] = {...} }.
+-- This unwraps them to access the actual properties.
+-- ***********************************************************
+function util.getEffectivePropertyTable(propertyTable)
+    if type(propertyTable) == "table" and type(propertyTable["< contents >"]) == "table" then
+        return propertyTable["< contents >"], propertyTable
+    end
+    return propertyTable, propertyTable
+end
+
 -- Shared by Export and Publish: validate export context and connect to Immich.
 -- contextLabel: "Export" or "Publish" (used in error messages and task name).
 -- Returns: exportSession, exportParams, immich or nil.
+-- ***********************************************************
 function util.validateExportContextAndConnect(exportContext, contextLabel)
     if not exportContext or not exportContext.exportSession or not exportContext.propertyTable then
         ErrorHandler.handleError('Export context is missing. Please try again.', (contextLabel or "Export") .. "Task: invalid export context")
@@ -161,12 +181,14 @@ function util.validateExportContextAndConnect(exportContext, contextLabel)
 end
 
 -- Shared: build a simple progress title, e.g. "Publishing 5 photos to Immich".
+-- ***********************************************************
 function util.buildSimpleUploadProgressTitle(nPhotos, verb, suffix)
     local countStr = (nPhotos > 1) and (nPhotos .. " photos") or "one photo"
     return verb .. " " .. countStr .. " to " .. (suffix or "Immich")
 end
 
 -- Shared: show failure and stack-warning dialogs after upload.
+-- ***********************************************************
 function util.reportUploadFailuresAndWarnings(failures, stackWarnings)
     if failures and #failures > 0 then
         local message = (#failures == 1) and "1 file failed to upload correctly." or (tostring(#failures) .. " files failed to upload correctly.")
@@ -175,5 +197,33 @@ function util.reportUploadFailuresAndWarnings(failures, stackWarnings)
     if stackWarnings and #stackWarnings > 0 then
         local message = (#stackWarnings == 1) and "1 photo had stacking issues (uploaded without stack):" or (tostring(#stackWarnings) .. " photos had stacking issues (uploaded without stacks):")
         LrDialogs.message(message, table.concat(stackWarnings, "\n"))
+    end
+end
+
+-- ***********************************************************
+function util.serialiseVar(value, indent)
+    -- serialises an unknown variable
+    indent = indent or ""
+    local t = type(value)
+
+    if t == "table" then
+        local parts = {}
+        table.insert(parts, "{\n")
+        local nextIndent = indent .. "  "
+        for k, v in pairs(value) do
+            local key
+            if type(k) == "string" then
+                key = string.format("%q", k)
+            else
+                key = tostring(k)
+            end
+            table.insert(parts, nextIndent .. "[" .. key .. "] = " .. util.serialiseVar(v, nextIndent) .. ",\n")
+        end
+        table.insert(parts, indent .. "}")
+        return table.concat(parts)
+    elseif t == "string" then
+        return string.format("%q", value)
+    else
+        return tostring(value)
     end
 end
