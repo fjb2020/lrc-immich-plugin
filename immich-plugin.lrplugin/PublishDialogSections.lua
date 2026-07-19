@@ -122,14 +122,15 @@ function PublishDialogSections.sectionsForTopOfDialog(f, propertyTable)
 				},
 				f:row {
 					f:static_text {
-						title = "Tag hierarchy:",
+						title = "Ignore keyword tree:",
 						alignment = 'right',
 						width = LrView.share "label_width",
 					},
-					f:checkbox {
-						title = "Strip root keyword node from tag hierarchy",
-						value = bind 'stripTagRootNode',
-						enabled = bind 'syncMetadataAfterPublish',
+					f:edit_field {
+						value = bind 'ignoreKeywordTree',
+						truncation = 'middle',
+						immediate = false,
+						fill_horizontal = 1,
 					},
 				},
 			},

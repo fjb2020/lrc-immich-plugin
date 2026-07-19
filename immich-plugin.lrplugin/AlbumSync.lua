@@ -136,6 +136,38 @@ local function resolveServiceCredentials(serviceSettings, catalogSettings)
 end
 
 -- ***********************************************************
+local function isVideoAsset(asset)
+    if type(asset) ~= "table" then
+        return false
+    end
+
+    local fileName = tostring(asset.originalFileName or "")
+    local extension = string.match(string.lower(fileName), "%.([^.]+)$")
+    if not extension then
+        return false
+    end
+
+    local videoExtensions = {
+        mp4 = true,
+        mov = true,
+        m4v = true,
+        avi = true,
+        mkv = true,
+        webm = true,
+        wmv = true,
+        mpg = true,
+        mpeg = true,
+        mts = true,
+        m2ts = true,
+        ts = true,
+        ['3gp'] = true,
+        ['3g2'] = true,
+    }
+
+    return videoExtensions[extension] == true
+end
+
+-- ***********************************************************
 -- Build manifest path in staging folder.
 local function getManifestPath(stagingFolder)
     if not stagingFolder or stagingFolder == "" then
@@ -311,12 +343,6 @@ function AlbumSync.downloadMissingAssets(selectedPublishedCollection, stagingFol
     local catalogService = findCatalogServiceForCollectionService(service)
     local catalogSettings = getPublishSettings(catalogService)
     log:trace("Collection service localIdentifier: " .. tostring(service.localIdentifier))
-    log:trace("Raw publish settings: " .. util.serialiseVar(settings))
-    if catalogSettings then
-        log:trace("Catalog publish settings: " .. util.serialiseVar(catalogSettings))
-    else
-        log:trace("Catalog publish settings: nil (no matching catalog service found)")
-    end
 
     local url, apiKey, source = resolveServiceCredentials(settings, catalogSettings)
     if util.nilOrEmpty(url) or util.nilOrEmpty(apiKey) then
@@ -355,10 +381,16 @@ function AlbumSync.downloadMissingAssets(selectedPublishedCollection, stagingFol
         end
     end
     
-    -- Find missing assets.
+    log:info("AlbumSync: Found " .. tostring(#immichAssets) .. " assets in Immich album, " .. tostring(#publishedPhotos) .. " already published in Lightroom collection.")
+   log:info("AlbumSync: Published asset IDs: " .. util.serialiseVar(publishedAssetIds))
+    -- Find missing non-video assets.
     local missingAssets = {}
+    local skippedVideoCount = 0
     for _, asset in ipairs(immichAssets) do
-        if not publishedAssetIds[tostring(asset.id)] then
+        log:info("AlbumSync: Checking asset " .. tostring(asset.id) .. " (" .. tostring(asset.originalFileName) .. ")")  
+        if isVideoAsset(asset) then
+            skippedVideoCount = skippedVideoCount + 1
+        elseif not publishedAssetIds[tostring(asset.id)] then
             table.insert(missingAssets, asset)
         end
     end
@@ -447,10 +479,13 @@ function AlbumSync.downloadMissingAssets(selectedPublishedCollection, stagingFol
     if failedCount > 0 then
         message = message .. "; " .. tostring(failedCount) .. " download(s) failed (check logs)"
     end
+    if skippedVideoCount > 0 then
+        message = message .. "; " .. tostring(skippedVideoCount) .. " video asset(s) skipped"
+    end
     if importUiOpened then
-        message = message .. ".\n\nImport dialog opened at the staging folder. Import these images, then run 'Finalize Album Sync for Selected Collection'."
+        message = message .. ".\n\nImport dialog opened at the staging folder. Import these images using the 'Add' option, then run 'Finalize Album Sync for Selected Collection'."
     else
-        message = message .. ".\n\nNext: Import these images into Lightroom, then run 'Finalize Album Sync for Selected Collection'."
+        message = message .. ".\n\nNext: Import these images into Lightroom using the 'Add' option, then run 'Finalize Album Sync for Selected Collection'."
     end
     
     return true, message

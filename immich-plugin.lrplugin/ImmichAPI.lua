@@ -20,6 +20,9 @@ ImmichAPI.__index = ImmichAPI
 -- Private helpers
 -- ---------------------------------------------------------------------------
 
+-- ***********************************************************
+-- Safely JSON-decode an HTTP response string; logs and returns nil on failure.
+-- ***********************************************************
 local function safeDecodeJson(response, context)
     local ok, decoded = pcall(function() return JSON:decode(response or "{}") end)
     if not ok or decoded == nil then
@@ -29,6 +32,9 @@ local function safeDecodeJson(response, context)
     return decoded
 end
 
+-- ***********************************************************
+-- Assert connectivity before making a request; shows error dialog on failure.
+-- ***********************************************************
 local function ensureConnectivity(api)
     if not api:checkConnectivity() then
         ErrorHandler.handleError('Immich connection not setup. Go to module manager.', 'Immich connection not setup.')
@@ -37,11 +43,17 @@ local function ensureConnectivity(api)
     return true
 end
 
+-- ***********************************************************
+-- Emit a trace log line before each outgoing HTTP request.
+-- ***********************************************************
 local function logRequestStart(api, method, apiPath)
     log:trace('ImmichAPI: Preparing ' .. method .. ' request ' .. api.url .. api.apiBasePath .. apiPath)
     log:trace('ImmichAPI: ' .. util.cutApiKey(api.apiKey))
 end
 
+-- ***********************************************************
+-- Log and surface an error dialog when an HTTP request returns a non-success status.
+-- ***********************************************************
 local function handleRequestFailure(method, apiPath, status, headers, response)
     local detail = (headers and util.dumpTable(headers)) or "No headers"
     ErrorHandler.handleError(
@@ -53,10 +65,16 @@ local function handleRequestFailure(method, apiPath, status, headers, response)
     end
 end
 
+-- ***********************************************************
+-- Generate a random MIME multipart boundary string.
+-- ***********************************************************
 local function generateBoundary()
     return "ImmichUpload" .. tostring(math.random(100000, 999999))
 end
 
+-- ***********************************************************
+-- Build a raw multipart/form-data body string for a file upload request.
+-- ***********************************************************
 local function generateMultiPartBody(boundary, formData, filePath)
     if not boundary or not formData or not filePath or type(filePath) ~= "string" then
         log:error('generateMultiPartBody: invalid arguments (boundary, formData or filePath missing)')
@@ -102,6 +120,9 @@ end
 -- Configuration
 -- ---------------------------------------------------------------------------
 
+-- ***********************************************************
+-- Construct a new ImmichAPI instance with the given server URL and API key.
+-- ***********************************************************
 function ImmichAPI:new(url, apiKey)
     local o = setmetatable({}, ImmichAPI)
     o.deviceIdString = DEVICE_ID_STRING
@@ -111,6 +132,9 @@ function ImmichAPI:new(url, apiKey)
     return o
 end
 
+-- ***********************************************************
+-- Update the URL and API key on an existing instance without creating a new one.
+-- ***********************************************************
 function ImmichAPI:reconfigure(url, apiKey)
     self.apiKey = (apiKey ~= nil and type(apiKey) == "string") and apiKey or self.apiKey or ""
     self.url = (url ~= nil and type(url) == "string") and url or self.url or ""
@@ -118,11 +142,17 @@ function ImmichAPI:reconfigure(url, apiKey)
     log:trace('Immich reconfigured with API key: ' .. util.cutApiKey(self.apiKey))
 end
 
+-- ***********************************************************
+-- Set the server base URL on an existing instance.
+-- ***********************************************************
 function ImmichAPI:setUrl(url)
     self.url = url
     log:trace('Immich new URL set: ' .. self.url)
 end
 
+-- ***********************************************************
+-- Set the API key on an existing instance.
+-- ***********************************************************
 function ImmichAPI:setApiKey(apiKey)
     self.apiKey = apiKey
     log:trace('Immich new API key set: ' .. util.cutApiKey(self.apiKey))
@@ -132,6 +162,9 @@ end
 -- Assets
 -- ---------------------------------------------------------------------------
 
+-- ***********************************************************
+-- Download the original file bytes of an asset from Immich.
+-- ***********************************************************
 function ImmichAPI:downloadAsset(assetId)
     if util.nilOrEmpty(assetId) then
         ErrorHandler.handleError('No asset ID provided. Check logs.', 'downloadAsset: assetId empty')
@@ -161,6 +194,9 @@ function ImmichAPI:downloadAsset(assetId)
     end
 end
 
+-- ***********************************************************
+-- Return true if the asset has an associated live-photo video component.
+-- ***********************************************************
 function ImmichAPI:hasLivePhotoVideo(assetId)
     if util.nilOrEmpty(assetId) then
         ErrorHandler.handleError('No asset ID provided. Check logs.', 'hasLivePhotoVideo: assetId empty')
@@ -179,6 +215,9 @@ function ImmichAPI:hasLivePhotoVideo(assetId)
     end
 end
 
+-- ***********************************************************
+-- Return the Immich asset ID of the live-photo video companion, or nil.
+-- ***********************************************************
 function ImmichAPI:getLivePhotoVideoId(assetId)
     if util.nilOrEmpty(assetId) then
         ErrorHandler.handleError('No asset ID provided. Check logs.', 'getLivePhotoVideoId: assetId empty')
@@ -197,6 +236,9 @@ function ImmichAPI:getLivePhotoVideoId(assetId)
     end
 end
 
+-- ***********************************************************
+-- Return the original upload filename for the given asset ID.
+-- ***********************************************************
 function ImmichAPI:getOriginalFileName(assetId)
     if util.nilOrEmpty(assetId) then
         ErrorHandler.handleError('No asset ID provided. Check logs.', 'getOriginalFileName: assetId empty')
@@ -217,6 +259,9 @@ end
 
 
 
+-- ***********************************************************
+-- Return a list of {id, originalFileName} for every asset in an album.
+-- ***********************************************************
 function ImmichAPI:getAlbumAssets(albumId)
     if util.nilOrEmpty(albumId) then
         ErrorHandler.handleError('No album ID provided. Check logs.', 'getAlbumAssets: albumId empty')
@@ -247,10 +292,16 @@ end
 -- Headers
 -- ---------------------------------------------------------------------------
 
+-- ***********************************************************
+-- Return the API key string, or empty string if unset.
+-- ***********************************************************
 local function safeApiKey(api)
     return (api and api.apiKey ~= nil and type(api.apiKey) == "string") and api.apiKey or ""
 end
 
+-- ***********************************************************
+-- Build standard JSON request headers including the API key.
+-- ***********************************************************
 function ImmichAPI:createHeaders()
     return {
         { field = 'x-api-key',    value = safeApiKey(self) },
@@ -259,6 +310,9 @@ function ImmichAPI:createHeaders()
     }
 end
 
+-- ***********************************************************
+-- Build request headers for multipart form-data uploads (no Content-Type; set by LrHttp).
+-- ***********************************************************
 function ImmichAPI:createHeadersForMultipart()
     return {
         { field = 'x-api-key', value = safeApiKey(self) },
@@ -266,6 +320,9 @@ function ImmichAPI:createHeadersForMultipart()
     }
 end
 
+-- ***********************************************************
+-- Build request headers for a manually constructed multipart PUT upload.
+-- ***********************************************************
 function ImmichAPI:createHeadersForMultipartPut(boundary, length)
     return {
         { field = 'x-api-key',      value = safeApiKey(self) },
@@ -275,8 +332,9 @@ function ImmichAPI:createHeadersForMultipartPut(boundary, length)
     }
 end
 
--- Returns sanitized URL (string) on success; false on empty; nil on invalid format.
--- Does not show dialogs (for use in validate callbacks). Callers should show errors or return error messages.
+-- ***********************************************************
+-- Validate and strip trailing paths from a URL; returns sanitized string, false if empty, nil if malformed.
+-- ***********************************************************
 function ImmichAPI:sanityCheckAndFixURL(url)
     if util.nilOrEmpty(url) then
         return false
@@ -294,6 +352,9 @@ function ImmichAPI:sanityCheckAndFixURL(url)
     return sanitized
 end
 
+-- ***********************************************************
+-- Test connectivity by calling /users/me; returns true if reachable and authenticated.
+-- ***********************************************************
 function ImmichAPI:checkConnectivity()
     if util.nilOrEmpty(self.url) or util.nilOrEmpty(self.apiKey) then
         log:error('checkConnectivity: URL or API key is empty. Configure in plugin settings.')
@@ -323,14 +384,17 @@ end
 -- Dialog helpers (URL validation and test connection for Publish/Export dialogs)
 -- ---------------------------------------------------------------------------
 
+-- ***********************************************************
+-- Trim leading and trailing whitespace from a string (dialog helper).
+-- ***********************************************************
 local function _trimString(s)
 	if type(s) ~= "string" then return "" end
 	return s:match("^%s*(.-)%s*$") or ""
 end
 
--- Validates URL for Lr edit_field validate callback. Does not rely on an existing API instance.
--- url: value from the field; baseUrl, baseApiKey: current propertyTable values (for temp instance).
--- Returns: valid (bool), newValue (string), errorMessage (string).
+-- ***********************************************************
+-- Validate a URL entered in a Lightroom dialog edit field; returns valid, newValue, errorMessage.
+-- ***********************************************************
 function ImmichAPI.validateUrlForDialog(url, baseUrl, baseApiKey)
 	local raw = (type(url) == "string") and url or ""
 	local trimmed = _trimString(raw)
@@ -354,8 +418,9 @@ function ImmichAPI.validateUrlForDialog(url, baseUrl, baseApiKey)
 	return true, result, ""
 end
 
--- Runs a connection test. Trims url and apiKey; uses existingApi if provided and reconfigures it.
--- Returns: success (bool), message (string), apiInstance (for propertyTable.immich).
+-- ***********************************************************
+-- Run a connection test from a dialog; returns success, message, and an API instance.
+-- ***********************************************************
 function ImmichAPI.testConnection(url, apiKey, existingApi)
 	local u = _trimString(type(url) == "string" and url or "")
 	local key = (type(apiKey) == "string") and apiKey or ""
@@ -374,7 +439,9 @@ function ImmichAPI.testConnection(url, apiKey, existingApi)
 	return false, "Connection test failed. Check URL, API key, and network.", api
 end
 
--- Thanks to Min Idzelis
+-- ***********************************************************
+-- Return the browser-facing URL for an album in the Immich web UI.
+-- ***********************************************************
 function ImmichAPI:getAlbumUrl(albumId)
     if util.nilOrEmpty(albumId) then
         return nil
@@ -382,7 +449,9 @@ function ImmichAPI:getAlbumUrl(albumId)
     return self.url .. '/albums/' .. albumId
 end
 
--- Thanks to Min Idzelis
+-- ***********************************************************
+-- Return the browser-facing URL for an asset in the Immich web UI.
+-- ***********************************************************
 function ImmichAPI:getAssetUrl(id)
     if util.nilOrEmpty(id) then
         return nil
@@ -390,6 +459,9 @@ function ImmichAPI:getAssetUrl(id)
     return self.url .. '/photos/' .. id
 end
 
+-- ***********************************************************
+-- Upload a rendered file to Immich and return the new Immich asset ID.
+-- ***********************************************************
 function ImmichAPI:uploadAsset(pathOrMessage, deviceAssetId)
     if util.nilOrEmpty(pathOrMessage) then
         ErrorHandler.handleError('No filename given. Check logs.', 'uploadAsset: pathOrMessage empty')
@@ -423,6 +495,9 @@ function ImmichAPI:uploadAsset(pathOrMessage, deviceAssetId)
     return nil
 end
 
+-- ***********************************************************
+-- Replace an existing Immich asset with a new file, copying metadata across then deleting the old asset.
+-- ***********************************************************
 function ImmichAPI:replaceAsset(immichId, pathOrMessage, deviceAssetId)
     if util.nilOrEmpty(immichId) then
         ErrorHandler.handleError('Immich asset ID missing. Check logs.', 'replaceAsset: immichId empty')
@@ -465,6 +540,9 @@ function ImmichAPI:replaceAsset(immichId, pathOrMessage, deviceAssetId)
     return nil
 end
 
+-- ***********************************************************
+-- Copy mutable metadata from one Immich asset to another.
+-- ***********************************************************
 function ImmichAPI:copyAssetMetadata(sourceAssetId, targetAssetId)
     if util.nilOrEmpty(sourceAssetId) then
         ErrorHandler.handleError('Source Immich asset ID missing. Check logs.', 'copyAssetMetadata: sourceAssetId empty')
@@ -487,6 +565,9 @@ function ImmichAPI:copyAssetMetadata(sourceAssetId, targetAssetId)
 end
 
 
+-- ***********************************************************
+-- Permanently delete an asset from Immich by its ID.
+-- ***********************************************************
 function ImmichAPI:deleteAsset(immichId)
     if util.nilOrEmpty(immichId) then
         ErrorHandler.handleError('Immich asset ID missing. Check logs.', 'deleteAsset: immichId empty')
@@ -505,6 +586,9 @@ function ImmichAPI:deleteAsset(immichId)
 end
 
 
+-- ***********************************************************
+-- Remove an asset from an album without deleting the asset itself.
+-- ***********************************************************
 function ImmichAPI:removeAssetFromAlbum(albumId, assetId)
     if util.nilOrEmpty(albumId) then
         ErrorHandler.handleError('Immich album ID missing. Check logs.', 'removeAssetFromAlbum: albumId empty')
@@ -528,6 +612,9 @@ function ImmichAPI:removeAssetFromAlbum(albumId, assetId)
     return true
 end
 
+-- ***********************************************************
+-- Add an asset to an existing album.
+-- ***********************************************************
 function ImmichAPI:addAssetToAlbum(albumId, assetId)
     if util.nilOrEmpty(albumId) then
         ErrorHandler.handleError('Immich album ID missing. Check logs.', 'addAssetToAlbum: albumId empty')
@@ -555,6 +642,9 @@ end
 -- Stacks
 -- ---------------------------------------------------------------------------
 
+-- ***********************************************************
+-- Create a stack in Immich from a list of asset IDs (minimum two assets required).
+-- ***********************************************************
 function ImmichAPI:createStack(assetIds)
     if not assetIds or #assetIds < 2 then
         ErrorHandler.handleError('Need at least 2 assets to create a stack. Check logs.', 'createStack: need at least 2 assets')
@@ -580,6 +670,9 @@ end
 -- Albums
 -- ---------------------------------------------------------------------------
 
+-- ***********************************************************
+-- Create a new album in Immich and return its ID.
+-- ***********************************************************
 function ImmichAPI:createAlbum(albumName)
     if util.nilOrEmpty(albumName) then
         ErrorHandler.handleError('No album name given. Check logs.', 'createAlbum: albumName empty')
@@ -596,6 +689,9 @@ function ImmichAPI:createAlbum(albumName)
     return nil
 end
 
+-- ***********************************************************
+-- Return the album name for a given album ID.
+-- ***********************************************************
 function ImmichAPI:getAlbumNameById(albumId)
     if util.nilOrEmpty(albumId) then
         ErrorHandler.handleError('No album ID given. Check logs.', 'getAlbumNameById: albumId empty')
@@ -615,6 +711,9 @@ function ImmichAPI:getAlbumNameById(albumId)
 end
 
 
+-- ***********************************************************
+-- Return an existing folder-based album ID matching the name, or create one if absent.
+-- ***********************************************************
 function ImmichAPI:createOrGetAlbumFolderBased(albumName)
     if util.nilOrEmpty(albumName) then
         ErrorHandler.handleError('No album name given. Check logs.', 'createAlbum: albumName empty')
@@ -639,6 +738,9 @@ function ImmichAPI:createOrGetAlbumFolderBased(albumName)
     return nil
 end
 
+-- ***********************************************************
+-- Delete an album from Immich (assets are not deleted).
+-- ***********************************************************
 function ImmichAPI:deleteAlbum(albumId)
     if util.nilOrEmpty(albumId) then
         ErrorHandler.handleError('No album ID provided. Cannot delete album.', 'deleteAlbum: albumId empty')
@@ -655,6 +757,9 @@ function ImmichAPI:deleteAlbum(albumId)
     end
 end
 
+-- ***********************************************************
+-- Rename an album in Immich.
+-- ***********************************************************
 function ImmichAPI:renameAlbum(albumId, newName)
     if util.nilOrEmpty(albumId) then
         ErrorHandler.handleError('No album ID provided. Cannot rename album.', 'renameAlbum: albumId empty')
@@ -678,6 +783,9 @@ function ImmichAPI:renameAlbum(albumId, newName)
     end
 end
 
+-- ***********************************************************
+-- Return all albums from Immich as a list of {title, value} pairs (includes creation date in title).
+-- ***********************************************************
 function ImmichAPI:getAlbums()
     local path = '/albums'
     local parsedResponse = self:doGetRequest(path)
@@ -697,6 +805,9 @@ function ImmichAPI:getAlbums()
     end
 end
 
+-- ***********************************************************
+-- Return all albums from Immich as a list of {title, value} pairs (title is album name only).
+-- ***********************************************************
 function ImmichAPI:getAlbumsWODate()
     local path = '/albums'
     local parsedResponse = self:doGetRequest(path)
@@ -716,6 +827,9 @@ end
 
 
 
+-- ***********************************************************
+-- Return albums whose name and description match the folder-based album convention.
+-- ***********************************************************
 function ImmichAPI:getAlbumsByNameFolderBased(albumName)
     if util.nilOrEmpty(albumName) then
         return nil
@@ -742,6 +856,9 @@ end
 -- Search / bulk
 -- ---------------------------------------------------------------------------
 
+-- ***********************************************************
+-- Fetch activity (comments and likes) for an album, optionally filtered to one asset.
+-- ***********************************************************
 function ImmichAPI:getActivities(albumId, assetId)
     if util.nilOrEmpty(albumId) then
         log:warn('getActivities: albumId empty')
@@ -757,9 +874,9 @@ function ImmichAPI:getActivities(albumId, assetId)
     return parsedResponse
 end
 
--- Bulk check if assets exist by deviceAssetIds
--- Returns a map of deviceAssetId -> {id, deviceAssetId} for existing assets
--- This uses the /assets/existing endpoint which returns asset IDs that match the provided deviceAssetIds
+-- ***********************************************************
+-- Bulk-check whether assets exist by deviceAssetId; returns a map of deviceAssetId -> {id, deviceAssetId}.
+-- ***********************************************************
 function ImmichAPI:bulkCheckAssets(deviceAssetIds)
     if not deviceAssetIds or #deviceAssetIds == 0 then
         return {}
@@ -795,9 +912,9 @@ function ImmichAPI:bulkCheckAssets(deviceAssetIds)
     return existingMap
 end
 
--- Enhanced duplicate detection that checks metadata first, then bulk check, then individual check
--- Returns assetId, deviceAssetId if found, nil otherwise
--- Backward compatible: also searches by localIdentifier so existing installations (uploaded with localIdentifier) are found
+-- ***********************************************************
+-- Check whether an asset already exists in Immich using stored metadata ID, then deviceAssetId, then filename+date fallback.
+-- ***********************************************************
 function ImmichAPI:checkIfAssetExistsEnhanced(photo, deviceAssetId, filename, dateCreated)
     require "MetadataTask"
     
@@ -866,6 +983,9 @@ function ImmichAPI:checkIfAssetExistsEnhanced(photo, deviceAssetId, filename, da
     return nil
 end
 
+-- ***********************************************************
+-- Check whether an asset exists by deviceAssetId or filename+date; returns Immich asset ID if found.
+-- ***********************************************************
 function ImmichAPI:checkIfAssetExists(localId, filename, dateCreated)
     if util.nilOrEmpty(localId) then
         log:warn('checkIfAssetExists: localId empty')
@@ -899,6 +1019,9 @@ function ImmichAPI:checkIfAssetExists(localId, filename, dateCreated)
     return nil
 end
 
+-- ***********************************************************
+-- Return true if the asset belongs to at least one album in Immich.
+-- ***********************************************************
 function ImmichAPI:checkIfAssetIsInAnAlbum(immichId)
     if util.nilOrEmpty(immichId) then
         log:warn('checkIfAssetIsInAnAlbum: immichId empty')
@@ -920,6 +1043,9 @@ function ImmichAPI:checkIfAssetIsInAnAlbum(immichId)
     return true
 end
 
+-- ***********************************************************
+-- Return the deviceAssetId (local Lightroom ID) stored on an Immich asset.
+-- ***********************************************************
 function ImmichAPI:getLocalIdForAssetId(assetId)
     local parsedResponse = self:getAssetInfo(assetId)
 
@@ -930,6 +1056,9 @@ function ImmichAPI:getLocalIdForAssetId(assetId)
     return nil
 end
 
+-- ***********************************************************
+-- Return the full asset info object from Immich for the given asset ID.
+-- ***********************************************************
 function ImmichAPI:getAssetInfo(assetId)
     if util.nilOrEmpty(assetId) then
         log:warn('getAssetInfo: assetId empty')
@@ -940,8 +1069,9 @@ function ImmichAPI:getAssetInfo(assetId)
     return parsedResponse
 end
 
--- Updates mutable first-class asset fields (e.g. description, latitude, longitude).
--- fields is passed as-is to PUT /assets/{id}.
+-- ***********************************************************
+-- Update mutable asset fields (description, GPS coordinates, etc.) via PUT /assets/{id}.
+-- ***********************************************************
 function ImmichAPI:updateAsset(assetId, fields)
     if util.nilOrEmpty(assetId) then
         log:warn('updateAsset: assetId empty')
@@ -959,7 +1089,9 @@ function ImmichAPI:updateAsset(assetId, fields)
     return result ~= nil
 end
 
--- Adds tags to assets in one request.
+-- ***********************************************************
+-- Apply a list of tag IDs to a list of assets in a single bulk request.
+-- ***********************************************************
 function ImmichAPI:bulkTagAssets(assetIds, tagIds)
     if type(assetIds) ~= "table" or #assetIds == 0 then
         log:warn('bulkTagAssets: assetIds empty')
@@ -982,7 +1114,9 @@ end
 -- Tags
 -- ---------------------------------------------------------------------------
 
--- Returns all tags from Immich as an array of {id, name, value (full path)}.
+-- ***********************************************************
+-- Return all tags from Immich as an array of {id, name, value} objects.
+-- ***********************************************************
 function ImmichAPI:getTags()
     local parsedResponse = self:doGetRequest('/tags')
     if parsedResponse == nil then
@@ -991,8 +1125,9 @@ function ImmichAPI:getTags()
     return parsedResponse
 end
 
--- Creates a tag in Immich. parentTagId is optional (nil for top-level).
--- Returns the created tag object, or nil on failure.
+-- ***********************************************************
+-- Create a tag in Immich, optionally nested under a parent tag; returns the created tag object.
+-- ***********************************************************
 function ImmichAPI:createTag(name, parentTagId)
     if util.nilOrEmpty(name) then
         log:warn('createTag: name is empty')
@@ -1011,8 +1146,9 @@ function ImmichAPI:createTag(name, parentTagId)
     return nil
 end
 
--- Deletes a tag in Immich by id.
--- Returns true on success, false otherwise.
+-- ***********************************************************
+-- Delete a tag from Immich by its ID; returns true on success.
+-- ***********************************************************
 function ImmichAPI:deleteTag(tagId)
     if util.nilOrEmpty(tagId) then
         log:warn('deleteTag: tagId is empty')
@@ -1053,6 +1189,9 @@ function ImmichAPI:deleteTag(tagId)
     return false
 end
 
+-- ***********************************************************
+-- Return true if the album exists on the Immich server (treats 404 as not found).
+-- ***********************************************************
 function ImmichAPI:checkIfAlbumExists(albumId)
     if util.nilOrEmpty(albumId) then return false end
     log:trace("ImmichAPI: checkIfAlbumExists")
@@ -1060,6 +1199,9 @@ function ImmichAPI:checkIfAlbumExists(albumId)
     return albumInfo ~= nil
 end
 
+-- ***********************************************************
+-- Return the full album info object from Immich for the given album ID.
+-- ***********************************************************
 function ImmichAPI:getAlbumInfo(albumId)
     if util.nilOrEmpty(albumId) then
         log:warn('getAlbumInfo: albumId empty')
@@ -1070,6 +1212,9 @@ function ImmichAPI:getAlbumInfo(albumId)
     return albumInfo
 end
 
+-- ***********************************************************
+-- Return a list of asset IDs belonging to an album.
+-- ***********************************************************
 function ImmichAPI:getAlbumAssetIds(albumId)
     if util.nilOrEmpty(albumId) then
         log:warn('getAlbumAssetIds: albumId empty')
@@ -1094,6 +1239,9 @@ end
 -- HTTP request layer
 -- ---------------------------------------------------------------------------
 
+-- ***********************************************************
+-- Perform a JSON POST request to the Immich API and return the decoded response.
+-- ***********************************************************
 function ImmichAPI:doPostRequest(apiPath, postBody)
     if not ensureConnectivity(self) then return nil end
 
@@ -1116,6 +1264,9 @@ function ImmichAPI:doPostRequest(apiPath, postBody)
     return nil
 end
 
+-- ***********************************************************
+-- Perform an arbitrary HTTP method (PUT, PATCH, DELETE, etc.) JSON request and return the decoded response.
+-- ***********************************************************
 function ImmichAPI:doCustomRequest(method, apiPath, postBody)
     if not ensureConnectivity(self) then return nil end
 
@@ -1140,6 +1291,9 @@ function ImmichAPI:doCustomRequest(method, apiPath, postBody)
     return nil
 end
 
+-- ***********************************************************
+-- Perform a JSON GET request to the Immich API and return the decoded response.
+-- ***********************************************************
 function ImmichAPI:doGetRequest(apiPath)
     if not ensureConnectivity(self) then return nil end
 
@@ -1159,7 +1313,9 @@ function ImmichAPI:doGetRequest(apiPath)
     return nil
 end
 
--- GET that treats 400/404 as "not found" and returns nil without error (e.g. album deleted on server).
+-- ***********************************************************
+-- Perform a GET request, treating 400/404 responses as "not found" rather than errors.
+-- ***********************************************************
 function ImmichAPI:doGetRequestAllow404(apiPath)
     if not ensureConnectivity(self) then return nil end
 
@@ -1183,6 +1339,9 @@ function ImmichAPI:doGetRequestAllow404(apiPath)
     return nil
 end
 
+-- ***********************************************************
+-- Perform a multipart/form-data POST request (used for asset uploads via LrHttp.postMultipart).
+-- ***********************************************************
 function ImmichAPI:doMultiPartPostRequest(apiPath, mimeChunks)
     if not ensureConnectivity(self) then return nil end
 
@@ -1201,6 +1360,9 @@ function ImmichAPI:doMultiPartPostRequest(apiPath, mimeChunks)
     return nil
 end
 
+-- ***********************************************************
+-- Perform a manually constructed multipart PUT request for asset replacement.
+-- ***********************************************************
 function ImmichAPI:doMultiPartPutRequest(apiPath, filePath, formData)
     if not ensureConnectivity(self) then return nil end
 

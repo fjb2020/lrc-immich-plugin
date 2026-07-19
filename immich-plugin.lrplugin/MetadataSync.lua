@@ -69,38 +69,14 @@ local function readCredentialField(settings, keys)
     return nil
 end
 
--- ***********************************************************
-local function readBooleanField(settings, keys)
-    if type(settings) ~= "table" then
-        return nil
-    end
-    for _, key in ipairs(keys or {}) do
-        local value = settings[key]
-        if type(value) == "boolean" then
-            return value
-        end
-        if type(value) == "string" then
-            local normalized = string.lower(value)
-            if normalized == "true" then
-                return true
-            end
-            if normalized == "false" then
-                return false
-            end
-        end
-    end
-    return nil
-end
-
--- ***********************************************************
 local function resolveServiceCredentials(serviceSettings, catalogSettings)
     local urlKeys = { "url", "URL", "immichUrl", "immichURL", "LR_url", "LR_URL" }
     local apiKeyKeys = { "apiKey", "apikey", "APIKey", "immichApiKey", "immichAPIKey", "LR_apiKey", "LR_apikey" }
-    local stripRootKeys = { "stripTagRootNode", "stripKeywordRootNode", "LR_stripTagRootNode" }
+    local ignoreKeywordTreeKeys = { "ignoreKeywordTree", "LR_ignoreKeywordTree" }
 
     local url = readCredentialField(serviceSettings, urlKeys)
     local apiKey = readCredentialField(serviceSettings, apiKeyKeys)
-    local stripTagRootNode = readBooleanField(serviceSettings, stripRootKeys)
+    local ignoreKeywordTree = readCredentialField(serviceSettings, ignoreKeywordTreeKeys)
     local source = "service settings"
 
     if util.nilOrEmpty(url) then
@@ -115,13 +91,6 @@ local function resolveServiceCredentials(serviceSettings, catalogSettings)
             source = "catalog service settings"
         end
     end
-    if stripTagRootNode == nil then
-        stripTagRootNode = readBooleanField(catalogSettings, stripRootKeys)
-        if stripTagRootNode ~= nil then
-            source = "catalog service settings"
-        end
-    end
-
     if util.nilOrEmpty(url) and type(prefs) == "table" and type(prefs.url) == "string" and trimString(prefs.url) then
         url = trimString(prefs.url)
         source = "global prefs fallback"
@@ -130,12 +99,18 @@ local function resolveServiceCredentials(serviceSettings, catalogSettings)
         apiKey = trimString(prefs.apiKey)
         source = "global prefs fallback"
     end
-    if stripTagRootNode == nil and type(prefs) == "table" and type(prefs.stripTagRootNode) == "boolean" then
-        stripTagRootNode = prefs.stripTagRootNode
+    if util.nilOrEmpty(ignoreKeywordTree) then
+        ignoreKeywordTree = readCredentialField(catalogSettings, ignoreKeywordTreeKeys)
+        if not util.nilOrEmpty(ignoreKeywordTree) then
+            source = "catalog service settings"
+        end
+    end
+    if util.nilOrEmpty(ignoreKeywordTree) and type(prefs) == "table" and type(prefs.ignoreKeywordTree) == "string" and trimString(prefs.ignoreKeywordTree) then
+        ignoreKeywordTree = trimString(prefs.ignoreKeywordTree)
         source = "global prefs fallback"
     end
 
-    return url, apiKey, stripTagRootNode, source
+    return url, apiKey, ignoreKeywordTree, source
 end
 
 -- ***********************************************************
@@ -385,16 +360,29 @@ local function getKeywordIncludeOnExport(keyword)
 end
 
 -- ***********************************************************
-local function applyKeywordExportRules(pathParts, stripRoot)
-    local filtered = {}
-    for i, part in ipairs(pathParts or {}) do
-        local includePart = true
+local function parseIgnoreKeywordTree(ignoreKeywordTree)
+    local lookup = {}
+    if type(ignoreKeywordTree) ~= "string" then
+        return lookup
+    end
 
-        -- stripTagRootNode always wins for the first element when enabled.
-        if stripRoot and i == 1 and #pathParts > 1 then
-            includePart = false
-        else
-            includePart = (part.includeOnExport ~= false)
+    for token in string.gmatch(ignoreKeywordTree, "([^,]+)") do
+        local name = trimString(token)
+        if name then
+            lookup[string.lower(name)] = true
+        end
+    end
+
+    return lookup
+end
+
+-- ***********************************************************
+local function applyKeywordExportRules(pathParts, ignoredRoots)
+    local filtered = {}
+    for _, part in ipairs(pathParts or {}) do
+        local includePart = (part.includeOnExport ~= false)
+        if ignoredRoots[string.lower(part.name or "")] then
+            return {}
         end
 
         if includePart and part.name then
@@ -407,13 +395,12 @@ end
 -- ***********************************************************
 -- Return de-duplicated keyword paths assigned to photo.
 -- ***********************************************************
-local function getAssignedKeywordPaths(photo, options)
+local function getAssignedKeywordPaths(photo, ignoredRoots)
     local keywordObjs = photo:getRawMetadata("keywords")
     if type(keywordObjs) ~= "table" then
         return {}
     end
 
-    local stripRoot = options and options.stripTagRootNode
     local unique = {}
     local paths = {}
     for _, keyword in ipairs(keywordObjs) do
@@ -430,7 +417,7 @@ local function getAssignedKeywordPaths(photo, options)
                 end
             end
 
-            local effectiveParts = applyKeywordExportRules(parts, stripRoot)
+            local effectiveParts = applyKeywordExportRules(parts, ignoredRoots)
             if #effectiveParts > 0 then
                 local key = string.lower(table.concat(effectiveParts, "\t"))
                 if not unique[key] then
@@ -493,19 +480,12 @@ local function ensureTagPath(immich, tagLookup, pathParts)
     return leafId
 end
 
--- ***********************************************************
--- Resolve/create tag IDs for photo keywords.
--- options.stripTagRootNode (bool): if true, remove the first element of each keyword path.
--- ***********************************************************
-local function resolveTagIdsForPhoto(immich, tagLookup, photo, options)
-    local paths = getAssignedKeywordPaths(photo, options)
+local function resolveTagIdsForPhotoWithIgnoredRoots(immich, tagLookup, photo, ignoredRoots)
+    local paths = getAssignedKeywordPaths(photo, ignoredRoots)
     if #paths == 0 then
         return {}
     end
 
-    local stripRoot = options and options.stripTagRootNode
-    log:trace('MetadataSync resolveTagIdsForPhoto: stripRoot=' ..
-        tostring(stripRoot) .. ' pathCount=' .. tostring(#paths))
     local ids = {}
     local seen = {}
     for _, parts in ipairs(paths) do
@@ -721,7 +701,7 @@ local function collectPairsGroupedByService(selectedPhotos)
                 local settings = getPublishSettings(service)
                 local catalogService = findCatalogServiceByLocalIdentifier(service and service.localIdentifier)
                 local catalogSettings = getPublishSettings(catalogService)
-                local url, apiKey, stripTagRootNode = resolveServiceCredentials(settings, catalogSettings)
+                local url, apiKey, ignoreKeywordTree = resolveServiceCredentials(settings, catalogSettings)
 
                 if util.nilOrEmpty(url) or util.nilOrEmpty(apiKey) then
                     log:warn('MetadataSync: missing URL/API key for Immich service; collection skipped: ' ..
@@ -737,13 +717,13 @@ local function collectPairsGroupedByService(selectedPhotos)
                             groups[groupKey] = {
                                 url = url,
                                 apiKey = apiKey,
-                                stripTagRootNode = (stripTagRootNode == true),
+                                ignoreKeywordTree = ignoreKeywordTree,
                                 photos = {},
                                 seenAssetIds = {},
                             }
-                        elseif groups[groupKey].stripTagRootNode == false and stripTagRootNode == true then
-                            -- Prefer true if any contributing publish service enables stripping.
-                            groups[groupKey].stripTagRootNode = true
+                        elseif util.nilOrEmpty(groups[groupKey].ignoreKeywordTree) and
+                            not util.nilOrEmpty(ignoreKeywordTree) then
+                            groups[groupKey].ignoreKeywordTree = ignoreKeywordTree
                         end
 
                         local assetKey = tostring(assetId)
@@ -792,7 +772,6 @@ end
 
 -- ***********************************************************
 -- Sync metadata for a list of photo/asset pairs against one Immich host.
--- options (optional table): { stripTagRootNode = bool }
 -- ***********************************************************
 function MetadataSync.syncPhotoAssetPairs(immich, pairs, progress, progressState, options)
     local results = {
@@ -802,6 +781,8 @@ function MetadataSync.syncPhotoAssetPairs(immich, pairs, progress, progressState
         failedUpdate = 0,
         failedTagging = 0,
     }
+
+    local ignoredRoots = parseIgnoreKeywordTree(options and options.ignoreKeywordTree)
 
     local tagLookup = buildTagLookup(immich:getTags() or {})
 
@@ -834,7 +815,7 @@ function MetadataSync.syncPhotoAssetPairs(immich, pairs, progress, progressState
             end
         end
 
-        local tagIds = resolveTagIdsForPhoto(immich, tagLookup, photo, options)
+        local tagIds = resolveTagIdsForPhotoWithIgnoredRoots(immich, tagLookup, photo, ignoredRoots)
         if #tagIds > 0 then
             if immich:bulkTagAssets({ assetId }, tagIds) then
                 results.tagged = results.tagged + 1
@@ -1062,8 +1043,9 @@ function MetadataSync.syncForCurrentSelection(syncDirection)
                 pullSummary.failedAssetReads = pullSummary.failedAssetReads + result.failedAssetReads
                 pullSummary.failedWrites = pullSummary.failedWrites + result.failedWrites
             else
-                local options = { stripTagRootNode = group.stripTagRootNode == true }
-                log:trace('MetadataSync standalone sync options stripTagRootNode=' .. tostring(options.stripTagRootNode))
+                local options = {
+                    ignoreKeywordTree = group.ignoreKeywordTree,
+                }
                 local result = MetadataSync.syncPhotoAssetPairs(immich, group.photos, progress, progressState, options)
                 pushSummary.processed = pushSummary.processed + result.processed
                 pushSummary.updated = pushSummary.updated + result.updated

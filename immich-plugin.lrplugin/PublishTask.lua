@@ -198,8 +198,9 @@ local function runPostPublishMetadataSync(immich, exportParams, exportedPrimaryB
         return
     end
 
-    local options = { stripTagRootNode = exportParams.stripTagRootNode }
-    log:trace('PublishTask: post-publish sync options stripTagRootNode=' .. tostring(options.stripTagRootNode))
+    local options = {
+        ignoreKeywordTree = exportParams.ignoreKeywordTree,
+    }
     local result = MetadataSync.syncExportedPrimaryMap(immich, exportedPrimaryByPhoto, nil, nil, options)
     log:trace('PublishTask: post-publish metadata sync processed=' .. tostring(result.processed)
         .. ' updated=' .. tostring(result.updated)

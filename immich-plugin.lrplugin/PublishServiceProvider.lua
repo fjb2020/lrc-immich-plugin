@@ -19,7 +19,7 @@ return {
 		{ key = 'stackDngJpg', default = false },
 		{ key = 'stackLrStacks', default = false },
 		{ key = 'syncMetadataAfterPublish', default = false },
-		{ key = 'stripTagRootNode', default = false },
+		{ key = 'ignoreKeywordTree', default = '' },
 	},
 
 	small_icon = 'icons/logo_small.png',
@@ -33,7 +33,7 @@ return {
 
 	canAddCommentsToService = false,
 	-- addCommentToPublishedPhoto = PublishTask.addCommentToPublishedPhoto,
-	getCommentsFromPublishedCollection = PublishTask.getCommentsFromPublishedCollection,
+	-- getCommentsFromPublishedCollection = PublishTask.getCommentsFromPublishedCollection,
 
 	deletePhotosFromPublishedCollection = PublishTask.deletePhotosFromPublishedCollection,
 	deletePublishedCollection = PublishTask.deletePublishedCollection,
