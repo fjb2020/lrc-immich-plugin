@@ -1,7 +1,6 @@
 MetadataTask = {}
 
-local keyAssetId = 'immichAssetId'
-
+local keyAssetId = "immichAssetId"
 
 -- Set or clear stored Immich asset ID for a photo. Pass nil or "" to clear (e.g. when asset was deleted in Immich).
 function MetadataTask.setImmichAssetId(photo, assetId)
@@ -24,7 +23,7 @@ function MetadataTask.setImmichAssetId(photo, assetId)
         catalog:withPrivateWriteAccessDo(function()
             photo:setPropertyForPlugin(_PLUGIN, keyAssetId, valueToSet)
             success = true
-        end)
+        end, { timeout = 5 })
     end)
     if not ok then
         log:error("setImmichAssetId: failed to write metadata: " .. tostring(err))
@@ -37,7 +36,7 @@ function MetadataTask.getImmichAssetId(photo)
     if not photo then
         return nil
     end
-    
+
     local assetId = photo:getPropertyForPlugin(_PLUGIN, keyAssetId)
     if assetId and assetId ~= "" then
         log:trace("getImmichAssetId: Found assetId " .. assetId .. " for photo " .. tostring(photo.localIdentifier))
