@@ -21,6 +21,7 @@ return {
     },
 
     LrMetadataProvider = "MetadataProvider.lua",
+    LrMetadataTagsetFactory = 'Tagset.lua',
 
     LrLibraryMenuItems = {
         {
@@ -48,5 +49,5 @@ return {
 
     LrPluginInfoURL = "https://github.com/bmachek/lrc-immich-plugin/",
 
-    VERSION = { major = 4, minor = 3, revision = 2, build = 0 },
+    VERSION = { major = 4, minor = 3, revision = 3, build = 1 },
 }
